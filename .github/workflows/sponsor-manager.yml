@@ -19,21 +19,15 @@ jobs:
             const tierName = event.sponsorship.tier.name;
             const tierPrice = event.sponsorship.tier.monthly_price_in_dollars;
             const action = event.action;
-
             const org = 'AnkleBreaker-Studio';
             const teamSlug = 'sponsors';
             const MIN_TIER_PRICE = 15;
+            const DISCORD_CHANNEL = '1476975591692435620';
 
-            const DISCORD_ANNOUNCEMENTS_CHANNEL = '1476975591692435620';
-
-            console.log(`Sponsor event: ${action}`);
-            console.log(`Sponsor: ${sponsor}, Tier: ${tierName} ($${tierPrice}/month)`);
-
-            // Helper: post to Discord
             async function postDiscord(message) {
               try {
                 const resp = await fetch(
-                  `https://discord.com/api/v10/channels/${DISCORD_ANNOUNCEMENTS_CHANNEL}/messages`,
+                  `https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages`,
                   {
                     method: 'POST',
                     headers: {
@@ -43,58 +37,47 @@ jobs:
                     body: JSON.stringify({ content: message })
                   }
                 );
-                if (resp.ok) {
-                  console.log('Discord message sent!');
-                } else {
-                  console.error(`Discord error: ${resp.status} - ${await resp.text()}`);
-                }
-              } catch (e) {
-                console.error(`Discord post failed: ${e.message}`);
-              }
+                if (!resp.ok) console.error(`Discord error: ${resp.status}`);
+              } catch (e) { console.error(`Discord post failed: ${e.message}`); }
             }
 
             if (action === 'created' || action === 'tier_changed') {
               if (tierPrice >= MIN_TIER_PRICE) {
-                // Add to sponsors team
                 try {
                   await github.rest.teams.addOrUpdateMembershipForUserInOrg({
                     org, team_slug: teamSlug, username: sponsor, role: 'member'
                   });
-                  console.log(`Added ${sponsor} to ${teamSlug} team`);
+                  console.log(`Added ${sponsor} to sponsors team`);
                 } catch (error) {
                   console.error(`Failed to add ${sponsor}: ${error.message}`);
                 }
 
-                // Post Discord welcome
                 if (action === 'created') {
-                  await postDiscord(
-                    `## :tada: New Sponsor!\n\n` +
-                    `**${sponsor}** just joined as a **${tierName}** sponsor! ` +
-                    `Welcome to the AnkleBreaker Studio family! :heart:\n\n` +
-                    `Thank you for supporting our MCP tools and open-source projects! :rocket:\n\n` +
-                    `> Don't forget to claim your **Private MCP Sponsor** Discord role in the [premium-mcps repo](https://github.com/AnkleBreaker-Studio/premium-mcps)!`
-                  );
+                  if (tierPrice >= 100) {
+                    await postDiscord(
+                      `## \ud83d\udd34 New MCP Priority Support Subscriber!\n\n` +
+                      `**${sponsor}** just joined as an **${tierName}** subscriber! Welcome to the inner circle! \u2764\ufe0f\n\n` +
+                      `Thank you for your incredible support of AnkleBreaker Studio! You now have priority access to our team. \ud83d\ude80\n\n` +
+                      `> Don't forget to claim your **MCP Priority Support** Discord role in the [premium-mcps repo](https://github.com/AnkleBreaker-Studio/premium-mcps)!`
+                    );
+                  } else {
+                    await postDiscord(
+                      `## \ud83c\udf89 New Sponsor!\n\n` +
+                      `**${sponsor}** just joined as a **${tierName}** sponsor! Welcome to the AnkleBreaker Studio family! \u2764\ufe0f\n\n` +
+                      `Thank you for supporting our MCP tools and open-source projects! \ud83d\ude80\n\n` +
+                      `> Don't forget to claim your **Private MCP Sponsor** Discord role in the [premium-mcps repo](https://github.com/AnkleBreaker-Studio/premium-mcps)!`
+                    );
+                  }
                 }
               } else if (action === 'tier_changed') {
-                // Downgraded below threshold
                 try {
-                  await github.rest.teams.removeMembershipForUserInOrg({
-                    org, team_slug: teamSlug, username: sponsor
-                  });
-                  console.log(`Removed ${sponsor} from team (downgraded below $${MIN_TIER_PRICE})`);
-                } catch (error) {
-                  console.log(`Note: ${sponsor} may not have been in team`);
-                }
+                  await github.rest.teams.removeMembershipForUserInOrg({ org, team_slug: teamSlug, username: sponsor });
+                } catch (error) { console.log(`Note: ${sponsor} may not have been in team`); }
               }
             }
 
             if (action === 'cancelled' || action === 'pending_cancellation') {
               try {
-                await github.rest.teams.removeMembershipForUserInOrg({
-                  org, team_slug: teamSlug, username: sponsor
-                });
-                console.log(`Removed ${sponsor} from ${teamSlug} team`);
-              } catch (error) {
-                console.log(`Note: ${sponsor} may not have been in team`);
-              }
+                await github.rest.teams.removeMembershipForUserInOrg({ org, team_slug: teamSlug, username: sponsor });
+              } catch (error) { console.log(`Note: ${sponsor} may not have been in team`); }
             }
