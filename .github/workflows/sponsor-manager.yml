@@ -1,0 +1,63 @@
+name: Sponsor Team Manager
+on:
+  sponsorship:
+    types: [created, cancelled, tier_changed, pending_cancellation]
+
+jobs:
+  manage-sponsor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle sponsor event
+        uses: actions/github-script@v7
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        with:
+          github-token: ${{ secrets.ORG_ADMIN_TOKEN }}
+          script: |
+            const event = context.payload;
+            const sponsor = event.sponsorship.sponsor.login;
+            const tierName = event.sponsorship.tier.name;
+            const tierPrice = event.sponsorship.tier.monthly_price_in_dollars;
+            const action = event.action;
+
+            const org = 'AnkleBreaker-Studio';
+            const teamSlug = 'sponsors';
+            const MIN_TIER_PRICE = 15;
+            const DISCORD_GUILD_ID = '1206936908404629504';
+            const DISCORD_ROLE_ID = '1479465964788781117';
+
+            console.log(`Sponsor event: ${action}`);
+            console.log(`Sponsor: ${sponsor}, Tier: ${tierName} ($${tierPrice}/month)`);
+
+            if (action === 'created' || action === 'tier_changed') {
+              if (tierPrice >= MIN_TIER_PRICE) {
+                try {
+                  await github.rest.teams.addOrUpdateMembershipForUserInOrg({
+                    org, team_slug: teamSlug, username: sponsor, role: 'member'
+                  });
+                  console.log(`Added ${sponsor} to ${teamSlug} team`);
+                } catch (error) {
+                  console.error(`Failed to add ${sponsor}: ${error.message}`);
+                }
+              } else if (action === 'tier_changed') {
+                try {
+                  await github.rest.teams.removeMembershipForUserInOrg({
+                    org, team_slug: teamSlug, username: sponsor
+                  });
+                  console.log(`Removed ${sponsor} from team (downgraded below $${MIN_TIER_PRICE})`);
+                } catch (error) {
+                  console.log(`Note: ${sponsor} may not have been in team`);
+                }
+              }
+            }
+
+            if (action === 'cancelled' || action === 'pending_cancellation') {
+              try {
+                await github.rest.teams.removeMembershipForUserInOrg({
+                  org, team_slug: teamSlug, username: sponsor
+                });
+                console.log(`Removed ${sponsor} from ${teamSlug} team`);
+              } catch (error) {
+                console.log(`Note: ${sponsor} may not have been in team`);
+              }
+            }
