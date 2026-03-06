@@ -23,14 +23,39 @@ jobs:
             const org = 'AnkleBreaker-Studio';
             const teamSlug = 'sponsors';
             const MIN_TIER_PRICE = 15;
-            const DISCORD_GUILD_ID = '1206936908404629504';
-            const DISCORD_ROLE_ID = '1479465964788781117';
+
+            const DISCORD_ANNOUNCEMENTS_CHANNEL = '1476975591692435620';
 
             console.log(`Sponsor event: ${action}`);
             console.log(`Sponsor: ${sponsor}, Tier: ${tierName} ($${tierPrice}/month)`);
 
+            // Helper: post to Discord
+            async function postDiscord(message) {
+              try {
+                const resp = await fetch(
+                  `https://discord.com/api/v10/channels/${DISCORD_ANNOUNCEMENTS_CHANNEL}/messages`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: message })
+                  }
+                );
+                if (resp.ok) {
+                  console.log('Discord message sent!');
+                } else {
+                  console.error(`Discord error: ${resp.status} - ${await resp.text()}`);
+                }
+              } catch (e) {
+                console.error(`Discord post failed: ${e.message}`);
+              }
+            }
+
             if (action === 'created' || action === 'tier_changed') {
               if (tierPrice >= MIN_TIER_PRICE) {
+                // Add to sponsors team
                 try {
                   await github.rest.teams.addOrUpdateMembershipForUserInOrg({
                     org, team_slug: teamSlug, username: sponsor, role: 'member'
@@ -39,7 +64,19 @@ jobs:
                 } catch (error) {
                   console.error(`Failed to add ${sponsor}: ${error.message}`);
                 }
+
+                // Post Discord welcome
+                if (action === 'created') {
+                  await postDiscord(
+                    `## :tada: New Sponsor!\n\n` +
+                    `**${sponsor}** just joined as a **${tierName}** sponsor! ` +
+                    `Welcome to the AnkleBreaker Studio family! :heart:\n\n` +
+                    `Thank you for supporting our MCP tools and open-source projects! :rocket:\n\n` +
+                    `> Don't forget to claim your **Private MCP Sponsor** Discord role in the [premium-mcps repo](https://github.com/AnkleBreaker-Studio/premium-mcps)!`
+                  );
+                }
               } else if (action === 'tier_changed') {
+                // Downgraded below threshold
                 try {
                   await github.rest.teams.removeMembershipForUserInOrg({
                     org, team_slug: teamSlug, username: sponsor
